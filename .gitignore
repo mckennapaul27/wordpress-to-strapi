@@ -10,3 +10,4 @@ wordpress-data.json
 wp-export/*
 wp-export/
 node_modules
+.env
