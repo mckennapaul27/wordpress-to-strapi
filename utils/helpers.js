@@ -1,8 +1,10 @@
-const mime = require('mime-types');
 const needle = require('needle');
 const path = require('path');
 const fs = require('fs');
 const { default: slugify } = require('slugify');
+const moment = require('moment');
+const _trim = require('lodash.trim');
+require('dotenv').config();
 
 const manifest = JSON.parse(
     fs.readFileSync('./wp-export/uploads/manifest.json', 'utf8')
@@ -29,16 +31,17 @@ const allMedia = manifest.allImages;
 
 const formatText = (data) => {
     let replacedData = data;
-    replacedData = data.replace('[cyear]', dayjs().format('YYYY'));
+    replacedData = data.replace('[cyear]', moment().format('YYYY'));
     replacedData = replacedData.replace(/[\r\n]/gm, '');
     replacedData = _trim(replacedData);
     const split = replacedData.split(' ').filter((a) => a);
     replacedData = split.join(' ');
+    replacedData = replacedData.replace('A:', 'A: ');
     return replacedData;
 };
 const formatAnchor = (data) => {
     let replacedData = data;
-    replacedData = data.replace('-cyear', '-' + dayjs().format('YYYY'));
+    replacedData = data.replace('-cyear', '-' + moment().format('YYYY'));
     replacedData = replacedData.replace(/[\r\n]/gm, '');
     replacedData = _trim(replacedData);
     const split = replacedData.split(' ').filter((a) => a);
@@ -58,105 +61,104 @@ const uploadMedia = async (obj) => {
     const alternativeText = alt;
 
     try {
-        if (name === 'purified-water') {
-            const data = {
-                fileInfo: JSON.stringify({
-                    alternativeText,
-                    name,
-                }),
-                files: {
-                    file,
-                    content_type: mimeType,
-                },
-            };
-            const { body } = await needle(
-                'post',
-                'http://localhost:1337' + '/api/upload',
-                data,
-                {
-                    multipart: true,
-                    // headers: {
-                    //     authorization: _axios.defaults.headers.Authorization,
-                    // },
-                }
-            );
-            if (Array.isArray(body)) {
-                if (body.length === 0) throw new Error('No image response');
+        const data = {
+            fileInfo: JSON.stringify({
+                alternativeText,
+                name,
+            }),
+            files: {
+                file,
+                content_type: mimeType,
+            },
+        };
+        const { body } = await needle(
+            'post',
+            'http://localhost:1337' + '/api/upload',
+            data,
+            {
+                multipart: true,
+                // headers: {
+                //     authorization: _axios.defaults.headers.Authorization,
+                // },
             }
-
-            const img = body[0];
-            const imgBlock = {
-                type: 'image',
-                data: {
-                    file: {
-                        url: img.url,
-                        mime: 'image/' + img.ext.slice(1),
-                        height: img.height,
-                        width: img.width,
-                        size: img.size,
-                        alt: img.alternativeText, // keep alt from original
-                        formats: img.formats,
-                    },
-                    caption: '',
-                    withBorder: false,
-                    stretched: false,
-                    withBackground: false,
-                },
-            };
-
-            // console.log('<< body >>');
-            // console.log(body);
-            // console.log('<< body >>');
-            return new Promise((resolve) => {
-                resolve(imgBlock);
-            });
-            //console.log(body);
-            // return Array.isArray(body) ? (body.length > 0 ? body[0] : null) : body;
+        );
+        if (Array.isArray(body)) {
+            if (body.length === 0) throw new Error('No image response');
         }
+
+        const img = body[0];
+        const imgBlock = {
+            type: 'image',
+            data: {
+                file: {
+                    url: img.url,
+                    mime: 'image/' + img.ext.slice(1),
+                    height: img.height,
+                    width: img.width,
+                    size: img.size,
+                    alt: img.alternativeText, // keep alt from original
+                    formats: img.formats,
+                },
+                caption: '',
+                withBorder: false,
+                stretched: false,
+                withBackground: false,
+            },
+        };
+        return new Promise((resolve) => {
+            resolve(imgBlock);
+        });
     } catch (e) {
         console.error(`File upload error: ${e.message}`);
         return null;
     }
 };
 
-const uploadMediaAlt = async ({ file, name, caption, alternativeText }) => {
-    try {
-        if (name === 'purified-water') {
-            const data = {
-                fileInfo: JSON.stringify({
-                    alternativeText,
-                    caption,
-                    name,
-                }),
-                files: {
-                    file,
-                    content_type: mime.contentType(file),
-                },
-            };
-            const { body } = await needle(
-                'post',
-                'http://localhost:1337' + '/api/upload',
-                data,
-                {
-                    multipart: true,
-                    // headers: {
-                    //     authorization: _axios.defaults.headers.Authorization,
-                    // },
+const writeObjToFile = (path, obj) => {
+    let str = typeof obj === 'string' ? obj : JSON.stringify(obj, null, '  ');
+    fs.writeFileSync(path, str, 'utf8');
+};
+
+const createHtmlFileFromSlug = async (slug) => {
+    const outputFile = './sample-html-pages/' + slug + '.html';
+    const postCollection = JSON.parse(
+        fs.readFileSync('./wp-export/posts/post_collection.json', 'utf8')
+    );
+    const post = postCollection.find((a) => a.slug === slug);
+    writeObjToFile(outputFile, post.encodedContent);
+};
+
+const removeDuplicateHeaders = (blocks) => {
+    const headerBlocks = blocks
+        .filter((a) => a.type === 'header')
+        .map((a) => {
+            const regex = /(<([^>]+)>)/gi;
+            a.data.text = a.data.text.replace(regex, '');
+            return a;
+        })
+        .reduce(
+            (acc, item) => {
+                if (acc.uniques.includes(item.data.text)) {
+                    acc.duplicates.push(item.data.text);
+                } else {
+                    acc.uniques.push(item.data.text);
                 }
-            );
-            // console.log('<< body >>');
-            // console.log(body);
-            // console.log('<< body >>');
-            return new Promise((resolve) => {
-                resolve(body);
-            });
-            //console.log(body);
-            // return Array.isArray(body) ? (body.length > 0 ? body[0] : null) : body;
-        }
-    } catch (e) {
-        console.error(`File upload error: ${e.message}`);
-        return null;
-    }
+                return acc;
+            },
+            {
+                uniques: [],
+                duplicates: [],
+            }
+        );
+    const blocksSimple = blocks.map((a) => {
+        if (a.data.text) return a.data.text;
+        else return null;
+    });
+    const toRemove = headerBlocks.duplicates.reduce((acc, item) => {
+        acc.push(blocksSimple.lastIndexOf(item));
+        return acc;
+    }, []);
+    return toRemove;
 };
 
 module.exports = {
@@ -165,4 +167,7 @@ module.exports = {
     formatAnchor,
     filterOnlyTags,
     uploadMedia,
+    writeObjToFile,
+    createHtmlFileFromSlug,
+    removeDuplicateHeaders,
 };

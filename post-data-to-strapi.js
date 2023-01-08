@@ -9,6 +9,7 @@ const mime = require('mime-types');
 const slugify = require('slugify');
 const qs = require('qs');
 const { parseEncodedContent } = require('./utils/parse-encoded-content');
+const { createHtmlFileFromSlug } = require('./utils/helpers');
 
 const fetch = (...args) =>
     import('node-fetch').then(({ default: fetch }) => fetch(...args));
@@ -68,6 +69,38 @@ const _put = async (r, obj) => {
         console.error(e.message);
         console.error(JSON.stringify(obj));
         throw e;
+    }
+};
+
+const postBlogData = (a, blogData) => {
+    try {
+        const allMedia = manifest.allImages;
+        const formData = new FormData();
+        console.log(typeof blogData.editorjsData);
+        formData.append(
+            'data',
+            JSON.stringify({
+                metaData: {
+                    title: blogData.attributes.title,
+                    description: a.metaDescription,
+                },
+                title: blogData.attributes.title,
+                slug: a.slug,
+                originalDate: a.postDate,
+                body: blogData.editorjsData,
+                wpId: a.id,
+            })
+        );
+        fetch('http://localhost:1337/api/blogs', {
+            method: 'POST',
+            body: formData,
+            // headers: { 'Content-Type': 'application/json' },
+        })
+            .then((res) => res.json())
+            .then((json) => console.log(json));
+    } catch (error) {
+        console.log('error occurred: ', error);
+        throw error;
     }
 };
 
@@ -178,11 +211,22 @@ const importPosts = async (doUpdates) => {
     // add h1 as metaTitle during blog creation
     const publishedPosts = wpPosts.filter((a) => a.status === 'publish');
     const mappedPosts = await publishedPosts
+        // .slice(0, 1)
+        //best-planer-thicknesser-reviews
+        .filter((a) => a.slug === 'water-softeners')
         .slice(0, 1)
         .reduce(async (prev, a) => {
             const acc = await prev;
             // console.log(a.encodedContent);
-            await parseEncodedContent(a.encodedContent, a.slug);
+            // createHtmlFileFromSlug(a.slug);
+            const blogData = await parseEncodedContent(
+                a.encodedContent,
+                a.slug
+            );
+
+            await postBlogData(a, blogData);
+
+            // console.log(blogData);
             // blocks
             // featuredImg
             // metaTitle

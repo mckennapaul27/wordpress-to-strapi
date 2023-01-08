@@ -7,6 +7,7 @@ const htmlUrls = require('html-urls');
 const download = require('image-downloader');
 const isImageUrl = require('is-image-url');
 const moment = require('moment');
+const { writeObjToFile } = require('./utils/helpers');
 require('dotenv').config();
 
 const parser = new XMLParser();
@@ -19,11 +20,6 @@ const postsDir = path.join(outputDir, 'posts');
 
 console.log(outputDir);
 console.log(uploadsDir);
-
-const writeObjToFile = (path, obj) => {
-    let str = typeof obj === 'string' ? o : JSON.stringify(obj, null, '  ');
-    fs.writeFileSync(path, str, 'utf8');
-};
 
 const allUrls = [];
 

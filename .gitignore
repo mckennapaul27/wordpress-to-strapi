@@ -3,11 +3,15 @@
 /wordpress-data.json
 /wp-export/*
 /wp-export/
+/sample-html-pages/
+/sample-html-pages/*
 /node_modules
 
 wp-export.xml
 wordpress-data.json
 wp-export/*
 wp-export/
+sample-html-pages/
+sample-html-pages/*
 node_modules
 .env
