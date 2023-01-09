@@ -76,21 +76,44 @@ const postBlogData = (a, blogData) => {
     try {
         const allMedia = manifest.allImages;
         const formData = new FormData();
-        console.log(typeof blogData.editorjsData);
-        formData.append(
-            'data',
-            JSON.stringify({
-                metaData: {
-                    title: blogData.attributes.title,
-                    description: a.metaDescription,
-                },
-                title: blogData.attributes.title,
-                slug: a.slug,
-                originalDate: a.postDate,
-                body: blogData.editorjsData,
-                wpId: a.id,
-            })
-        );
+        const { attributes, editorjsData, comparison } = blogData;
+
+        const data = {
+            metaData: {
+                title: attributes.title,
+                description: a.metaDescription,
+            },
+            title: attributes.title,
+            slug: a.slug,
+            originalDate: a.postDate,
+            body: editorjsData,
+            wpId: a.id,
+        };
+        if (comparison) {
+            data.comparison = comparison.items;
+            comparison.items.map((item, i) => {
+                const key = item.img.src;
+                const filepath = path.join(
+                    './wp-export/uploads/',
+                    allMedia[key]
+                );
+                const filename = slugify(path.parse(allMedia[key]).name);
+                const file = fs.createReadStream(filepath);
+                formData.append(`files.comparison[${i}].img`, file, filename);
+                return a;
+            });
+        }
+
+        // console.log(data);
+
+        formData.append('data', JSON.stringify(data));
+        const key = attributes.featuredImg.key;
+        const filepath = path.join('./wp-export/uploads/', allMedia[key]);
+        const filename = slugify(path.parse(allMedia[key]).name);
+        const file = fs.createReadStream(filepath);
+        // https://developer.mozilla.org/en-US/docs/Web/API/FormData/append
+        formData.append('files.featuredImg', file, filename);
+
         fetch('http://localhost:1337/api/blogs', {
             method: 'POST',
             body: formData,
@@ -213,18 +236,28 @@ const importPosts = async (doUpdates) => {
     const mappedPosts = await publishedPosts
         // .slice(0, 1)
         //best-planer-thicknesser-reviews
-        .filter((a) => a.slug === 'water-softeners')
+        // best-mig-welders-reviews
+        // electric-to-thermostatic-shower
+        // best-router-tables-reviews
+        // handheld-steam-cleaner
+        // how-to-clean-a-couch-with-a-steam-cleaner
+        // 6-reasons-why-clothes-smell-when-you-air-dry-them
+        // 4-reasons-why-your-home-cctv-dvr-keeps-freezing
+        // petrol-lawn-mowers-how-to-choose-a-mower
+        // water-softeners
+        // best-window-cleaning-vac-reviews
+        .filter((a) => a.slug === 'best-window-cleaning-vac-reviews')
         .slice(0, 1)
         .reduce(async (prev, a) => {
             const acc = await prev;
-            // console.log(a.encodedContent);
-            // createHtmlFileFromSlug(a.slug);
+            //createHtmlFileFromSlug(a.slug);
             const blogData = await parseEncodedContent(
                 a.encodedContent,
                 a.slug
             );
-
-            await postBlogData(a, blogData);
+            //console.log(blogData);
+            // check if exists, if it does, update it instead
+            // await postBlogData(a, blogData);
 
             // console.log(blogData);
             // blocks

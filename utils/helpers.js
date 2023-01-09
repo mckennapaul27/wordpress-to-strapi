@@ -161,6 +161,59 @@ const removeDuplicateHeaders = (blocks) => {
     return toRemove;
 };
 
+const logCurrentBlock = (block) => {
+    console.log('>>>>>> main item START >>>>>>');
+    console.log(block);
+    console.log('>>>>>> main item END >>>>>>');
+    if (block && block.type === 'list') {
+        console.log('\n');
+        console.log('>>>>>> list items START >>>>>>');
+        console.log(block.data.items);
+        console.log('>>>>>> list items END >>>>>>');
+    }
+    console.log('\n');
+};
+
+const formatHref = (href) => {
+    if (href.includes('dreamyhome.co.uk')) {
+        let replaced = href.replace('https://dreamyhome.co.uk/', '/');
+        replaced = replaced.replace('https://www.dreamyhome.co.uk/', '/');
+        replaced = replaced.replace('http://dreamyhome.co.uk/', '/');
+        replaced = replaced.replace('http://www.dreamyhome.co.uk/', '/');
+        if (replaced === '/') return replaced;
+        else {
+            const hasTrailingSlash = replaced.endsWith('/');
+            if (hasTrailingSlash) {
+                replaced = replaced.slice(0, replaced.length - 1);
+                return replaced;
+            }
+        }
+        return replaced;
+    } else return href;
+};
+
+const addMissingFeaturedImg = (domList, blocks, attributes) => {
+    const firstImgBlock = domList.find((obj) => obj.name === 'figure');
+    const foundImg = firstImgBlock.children.find((a) => a.name === 'img');
+    if (foundImg) {
+        attributes.featuredImg = {
+            key: foundImg.attribs.src,
+            alt: foundImg.attribs.alt,
+        };
+        const simpleBlocks = blocks.map((a) => a.type);
+        const indexOfFirstImg = simpleBlocks.indexOf('image');
+        const filteredBlocks = blocks.filter((a, i) => i !== indexOfFirstImg);
+        return filteredBlocks;
+    }
+};
+
+// // formatting & replacing
+// ' .'
+// '-A' >> '- A'
+// '-a' >> '- A'
+// 'A-' >> 'A -'
+// 'a-' >> 'a-'
+
 module.exports = {
     slugify,
     formatText,
@@ -170,4 +223,7 @@ module.exports = {
     writeObjToFile,
     createHtmlFileFromSlug,
     removeDuplicateHeaders,
+    logCurrentBlock,
+    formatHref,
+    addMissingFeaturedImg,
 };
