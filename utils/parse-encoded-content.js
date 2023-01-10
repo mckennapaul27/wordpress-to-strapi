@@ -12,6 +12,7 @@ const {
     logCurrentBlock,
     formatHref,
     addMissingFeaturedImg,
+    createHtmlFileFromSlug,
 } = require('./helpers');
 const { default: slugify } = require('slugify');
 const path = require('path');
@@ -99,9 +100,9 @@ const parseEncodedContent = async (html, slug) => {
                 currentName === 'div' &&
                 obj.attribs.class === 'wp-block-group product-details-group'
             ) {
-                console.log(
-                    'Has found classname: "wp-block-group product-details-group"'
-                );
+                // console.log(
+                //     'Has found classname: "wp-block-group product-details-group"'
+                // );
                 if (detailedReviews.length === 0) {
                     blocks.push({
                         type: 'paragraph',
@@ -131,8 +132,12 @@ const parseEncodedContent = async (html, slug) => {
                 const strong = obj.children.find((a) => a.name === 'strong');
                 if (strong) {
                     const strongChild = strong.children[0];
-                    if (strongChild && strongChild.data.includes('Our Top 3')) {
-                        const top3Block = await createTop3List({ obj });
+                    if (
+                        strongChild &&
+                        strongChild.data &&
+                        strongChild.data.includes('Our Top 3')
+                    ) {
+                        const top3Block = await createTop3List({ obj }, slug);
                         await top3Block.reduce(async (prev, a) => {
                             const acc = await prev;
                             blocks.push(a);
@@ -324,6 +329,8 @@ const parseEncodedContent = async (html, slug) => {
                         ].content.concat(replacedData);
                 }
                 if (parentName === 'strong' && replacedData) {
+                    if (grandParentName === 'h1')
+                        return new Promise((resolve) => resolve(true));
                     if (currentBlock.type === 'paragraph') {
                         currentBlock.data.text =
                             currentBlock.data.text.concat(replacedData) +
@@ -415,7 +422,7 @@ const parseEncodedContent = async (html, slug) => {
 
             return new Promise((resolve) => resolve(true));
         } catch (error) {
-            console.log('FOUND ERROR WITH ELEMENT');
+            console.log('FOUND ERROR in MAIN_FUCNTION WITH ELEMENT');
             console.log('ERROR RETURNED: ', error);
             console.log('current block: ');
             logCurrentBlock(currentBlock);
@@ -426,6 +433,7 @@ const parseEncodedContent = async (html, slug) => {
             console.log('grandparent name: ', grandParentName);
             console.log('grandparent type: ', grandParentType);
             console.log('data: ', data);
+            createHtmlFileFromSlug(slug);
             console.log('\n');
             return new Promise((resolve) => resolve(true));
         }

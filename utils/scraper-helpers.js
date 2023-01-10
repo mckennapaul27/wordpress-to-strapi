@@ -7,10 +7,11 @@ const {
     formatAnchor,
     replaceNumbers,
     downloadAmzImg,
+    createHtmlFileFromSlug,
 } = require('./helpers');
 const headers = ['h2', 'h3', 'h4', 'h5', 'h6'];
 
-const createTop3List = async ({ obj }) => {
+const createTop3List = async ({ obj }, slug) => {
     //console.log(obj);
     const top3block = [
         {
@@ -47,7 +48,10 @@ const createTop3List = async ({ obj }) => {
                     const linkChildren = obj.children
                         .filter((a) => a.type === 'tag' && a.name === 'a')
                         .map((a) => {
-                            const text = a.children[0].data;
+                            const text =
+                                a.children[0] && a.children[0].data
+                                    ? a.children[0].data
+                                    : '';
 
                             // console.log(a.children[0].data);
                             return {
@@ -88,13 +92,14 @@ const createTop3List = async ({ obj }) => {
             console.log('FOUND ERROR WITH ELEMENT');
             console.log('ERROR RETURNED: ', error);
             console.log('current block: ');
-            logCurrentBlock(currentBlock);
+            // logCurrentBlock(currentBlock);
             console.log('current name: ', currentName);
             console.log('current type: ', currentType);
             console.log('parent name: ', parentName);
             console.log('parent type: ', parentType);
             console.log('data: ', data);
             console.log('\n');
+            createHtmlFileFromSlug(slug);
         }
     };
     await createTop3DOMStructure({ obj });
@@ -292,22 +297,37 @@ const createProductComparisonTable = async ({ obj }) => {
                                 );
                             else if (rowName === 'PRICE') {
                                 tds.slice(1).map((td, i) => {
-                                    const findAmzCode = td.children.find((a) =>
-                                        a.data.includes('amazon fields=')
-                                    );
-                                    const text = formatText(findAmzCode.data)
-                                        .split(' ')[1]
-                                        .split('"')[1];
-                                    const findAmzLink = td.children.find(
-                                        (a) =>
-                                            a.name === 'a' &&
-                                            a.attribs.href.startsWith(
-                                                'https://www.amaz'
+                                    if (td.children.length > 0) {
+                                        const findAmzCode = td.children.find(
+                                            (a) =>
+                                                a.data &&
+                                                a.data.includes(
+                                                    'amazon fields='
+                                                )
+                                        );
+                                        if (findAmzCode && findAmzCode.data) {
+                                            const text = formatText(
+                                                findAmzCode.data
                                             )
-                                    );
-                                    comparison.items[i].amazonCode = text;
-                                    comparison.items[i].amazonLink =
-                                        findAmzLink.attribs.href;
+                                                .split(' ')[1]
+                                                .split('"')[1];
+                                            comparison.items[i].amazonCode =
+                                                text;
+                                        }
+
+                                        const findAmzLink = td.children.find(
+                                            (a) =>
+                                                a.name === 'a' &&
+                                                a.attribs.href.startsWith(
+                                                    'https://www.amaz'
+                                                )
+                                        );
+                                        if (findAmzLink) {
+                                            comparison.items[i].amazonLink =
+                                                findAmzLink.attribs.href;
+                                        }
+                                    }
+
                                     return td;
                                 });
                             } else if (rowName === 'OVERALL SCORE') {
@@ -525,6 +545,13 @@ const extractComponentHeaders = async ({ obj }, item) => {
             obj.parent && obj.parent.parent && obj.parent.parent.parent
                 ? obj.parent.parent.parent.name
                 : null;
+        const greatGreatGrandParentName =
+            obj.parent &&
+            obj.parent.parent &&
+            obj.parent.parent.parent &&
+            obj.parent.parent.parent.parent
+                ? obj.parent.parent.parent.parent.name
+                : null;
         const data = obj.data || null;
 
         try {
@@ -584,6 +611,17 @@ const extractComponentHeaders = async ({ obj }, item) => {
                         grandParentName === 'a' &&
                         (greatGrandParentName === 'h2' ||
                             greatGrandParentName === 'h3')
+                    ) {
+                        item.titleText = item.titleText.concat(
+                            replaceNumbers(replacedData)
+                        );
+                    }
+                    if (
+                        parentName === 'strong' &&
+                        grandParentName === 'a' &&
+                        greatGrandParentName === 'strong' &&
+                        (greatGreatGrandParentName === 'h2' ||
+                            greatGreatGrandParentName === 'h3')
                     ) {
                         item.titleText = item.titleText.concat(
                             replaceNumbers(replacedData)

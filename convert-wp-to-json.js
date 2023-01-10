@@ -271,6 +271,7 @@ async function downloadImages() {
             const localImagePath = path.join(uploadsDir, localImage); //'./wp-export/uploads' + "2021/03/pea-tendrils.jpg"
             console.log('LOCAL_IMAGE_PATH', localImagePath);
             if (!fs.existsSync(localImagePath)) {
+                //'./wp-export/uploads' + "2021/03/pea-tendrils.jpg"
                 const localImageDir = path.dirname(localImagePath); // './wp-export/uploads/2021/03
                 console.log('LOCAL_IMAGE_DIRECTORY', localImageDir);
                 try {

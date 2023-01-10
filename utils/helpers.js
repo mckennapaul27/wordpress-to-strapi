@@ -8,6 +8,8 @@ const downloader = require('image-downloader');
 const { lastIndexOf } = require('lodash');
 require('dotenv').config();
 
+const strapiUrl = process.env.STRAPI_URL || 'http://localhost:1337';
+
 const manifest = JSON.parse(
     fs.readFileSync('./wp-export/uploads/manifest.json', 'utf8')
 );
@@ -55,62 +57,66 @@ const formatAnchor = (data) => {
 const filterOnlyTags = (obj) => obj.children.filter((a) => a.type === 'tag');
 
 const uploadMedia = async (obj) => {
-    const { src, alt } = obj.attribs;
-    const split = src.split('.');
-    const ext = split[split.length - 1];
-    const file = path.join('./wp-export/uploads/', allMedia[src]);
-    const name = slugify(path.parse(allMedia[src]).name);
-    const mimeType = `image/${ext}`;
-    const alternativeText = alt;
-
     try {
-        const data = {
-            fileInfo: JSON.stringify({
-                alternativeText,
-                name,
-            }),
-            files: {
-                file,
-                content_type: mimeType,
-            },
-        };
-        const { body } = await needle(
-            'post',
-            'http://localhost:1337' + '/api/upload',
-            data,
-            {
-                multipart: true,
-                // headers: {
-                //     authorization: _axios.defaults.headers.Authorization,
-                // },
-            }
-        );
-        if (Array.isArray(body)) {
-            if (body.length === 0) throw new Error('No image response');
-        }
-
-        const img = body[0];
-        const imgBlock = {
-            type: 'image',
-            data: {
-                file: {
-                    url: img.url,
-                    mime: 'image/' + img.ext.slice(1),
-                    height: img.height,
-                    width: img.width,
-                    size: img.size,
-                    alt: img.alternativeText, // keep alt from original
-                    formats: img.formats,
+        const { src, alt } = obj.attribs;
+        const split = src.split('.');
+        const ext = split[split.length - 1];
+        const file = path.join('./wp-export/uploads/', allMedia[src]);
+        if (fs.existsSync(file)) {
+            const name = slugify(path.parse(allMedia[src]).name);
+            const mimeType = `image/${ext}`;
+            const alternativeText = alt;
+            const data = {
+                fileInfo: JSON.stringify({
+                    alternativeText,
+                    name,
+                }),
+                files: {
+                    file,
+                    content_type: mimeType,
                 },
-                caption: '',
-                withBorder: false,
-                stretched: false,
-                withBackground: false,
-            },
-        };
-        return new Promise((resolve) => {
-            resolve(imgBlock);
-        });
+            };
+            const { body } = await needle(
+                'post',
+                strapiUrl + '/api/upload',
+                data,
+                {
+                    multipart: true,
+                    // headers: {
+                    //     authorization: _axios.defaults.headers.Authorization,
+                    // },
+                }
+            );
+            if (Array.isArray(body)) {
+                if (body.length === 0) throw new Error('No image response');
+            }
+
+            const img = body[0];
+            const imgBlock = {
+                type: 'image',
+                data: {
+                    file: {
+                        url: img.url,
+                        mime: 'image/' + img.ext.slice(1),
+                        height: img.height,
+                        width: img.width,
+                        size: img.size,
+                        alt: img.alternativeText, // keep alt from original
+                        formats: img.formats,
+                    },
+                    caption: '',
+                    withBorder: false,
+                    stretched: false,
+                    withBackground: false,
+                },
+            };
+            return new Promise((resolve) => {
+                resolve(imgBlock);
+            });
+        } else
+            return new Promise((resolve) => {
+                resolve(null);
+            });
     } catch (e) {
         console.error(`File upload error: ${e.message}`);
         return null;
@@ -198,16 +204,24 @@ const formatHref = (href) => {
 
 const addMissingFeaturedImg = (domList, blocks, attributes) => {
     const firstImgBlock = domList.find((obj) => obj.name === 'figure');
-    const foundImg = firstImgBlock.children.find((a) => a.name === 'img');
-    if (foundImg) {
-        attributes.featuredImg = {
-            key: foundImg.attribs.src,
-            alt: foundImg.attribs.alt,
-        };
-        const simpleBlocks = blocks.map((a) => a.type);
-        const indexOfFirstImg = simpleBlocks.indexOf('image');
-        const filteredBlocks = blocks.filter((a, i) => i !== indexOfFirstImg);
-        return filteredBlocks;
+    if (firstImgBlock) {
+        if (firstImgBlock.children.length > 0) {
+            const foundImg = firstImgBlock.children.find(
+                (a) => a.name === 'img'
+            );
+            if (foundImg) {
+                attributes.featuredImg = {
+                    key: foundImg.attribs.src,
+                    alt: foundImg.attribs.alt,
+                };
+                const simpleBlocks = blocks.map((a) => a.type);
+                const indexOfFirstImg = simpleBlocks.indexOf('image');
+                const filteredBlocks = blocks.filter(
+                    (a, i) => i !== indexOfFirstImg
+                );
+                return filteredBlocks;
+            }
+        }
     }
 };
 

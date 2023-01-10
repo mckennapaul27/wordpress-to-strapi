@@ -19,6 +19,7 @@ const strapiUrl = process.env.STRAPI_URL || 'http://localhost:1337';
 const _axios = axios.create({
     baseURL: strapiUrl,
 });
+//console.log(_axios);
 const site = JSON.parse(fs.readFileSync('./wp-export/site.json', 'utf8'));
 const wpCategories = JSON.parse(
     fs.readFileSync('./wp-export/categories.json', 'utf8')
@@ -72,7 +73,119 @@ const _put = async (r, obj) => {
     }
 };
 
+const updateBlogData = async (a, blogData, categories, id) => {
+    console.log('attempting to UPDATE post (', a.slug, ') ....');
+    try {
+        const allMedia = manifest.allImages;
+        const formData = new FormData();
+        const { attributes, editorjsData, comparison, detailedReviews } =
+            blogData;
+        //console.log(detailedReviews);
+        const data = {
+            metaData: {
+                title: attributes.title,
+                description: a.metaDescription,
+            },
+            title: attributes.title,
+            slug: a.slug,
+            originalDate: a.postDate,
+            pubDate: a.pubDate,
+            body: editorjsData,
+            wpId: a.id,
+            author: 1, // trying array
+            categories,
+        };
+        if (comparison) {
+            data.comparison = comparison.items;
+            comparison.items.map((item, i) => {
+                if (item.img.src) {
+                    const key = item.img.src;
+                    const filepath = path.join(
+                        './wp-export/uploads/',
+                        allMedia[key]
+                    );
+                    if (fs.existsSync(filepath)) {
+                        const filename = slugify(
+                            path.parse(allMedia[key]).name
+                        );
+                        const file = fs.createReadStream(filepath);
+                        formData.append(
+                            `files.comparison[${i}].img`,
+                            file,
+                            filename
+                        );
+                    }
+                }
+                return item;
+            });
+        }
+        if (detailedReviews.length > 0) {
+            data.detailedReviews = detailedReviews;
+            detailedReviews.map((item, i) => {
+                // console.log(item);
+                try {
+                    //if (item.img.src) {
+                    const key = item.img.src;
+                    if (key && allMedia[key]) {
+                        const filepath = path.join(
+                            './wp-export/uploads/',
+                            allMedia[key]
+                        );
+                        if (fs.existsSync(filepath)) {
+                            const filename = slugify(
+                                path.parse(allMedia[key]).name
+                            );
+                            const file = fs.createReadStream(filepath);
+                            formData.append(
+                                `files.detailedReviews[${i}].img`,
+                                file,
+                                filename
+                            );
+                        }
+                    }
+                } catch (error) {
+                    console.log('error with index: ', i);
+                    console.log(detailedReviews[i]);
+                    console.log(error);
+                }
+                return item;
+            });
+        }
+
+        // console.log(data);
+
+        formData.append('data', JSON.stringify(data));
+        const key = attributes.featuredImg.key;
+        if (allMedia[key]) {
+            const filepath = path.join('./wp-export/uploads/', allMedia[key]);
+            if (fs.existsSync(filepath)) {
+                const filename = slugify(path.parse(allMedia[key]).name);
+                const file = fs.createReadStream(filepath);
+                // https://developer.mozilla.org/en-US/docs/Web/API/FormData/append
+                formData.append('files.featuredImg', file, filename);
+            }
+        }
+
+        const res = await fetch(strapiUrl + '/api/blogs/' + id, {
+            method: 'PUT',
+            body: formData,
+            // headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        // console.log(json);
+    } catch (error) {
+        console.log(a.slug);
+        console.log('ERROR WITH UPDATE');
+        console.error(error);
+
+        // console.log(blogData.detailedReviews);
+        createHtmlFileFromSlug(a.slug);
+        throw error;
+    }
+};
+
 const postBlogData = async (a, blogData, categories) => {
+    console.log('attempting to CREATE post (', a.slug, ') ....');
     try {
         const allMedia = manifest.allImages;
         const formData = new FormData();
@@ -97,32 +210,68 @@ const postBlogData = async (a, blogData, categories) => {
             data.comparison = comparison.items;
             comparison.items.map((item, i) => {
                 const key = item.img.src;
-                const filepath = path.join(
-                    './wp-export/uploads/',
-                    allMedia[key]
-                );
-                const filename = slugify(path.parse(allMedia[key]).name);
-                const file = fs.createReadStream(filepath);
-                formData.append(`files.comparison[${i}].img`, file, filename);
+                if (allMedia[key]) {
+                    //console.log('allMedia[key] >> ', allMedia[key]);
+                    const filepath = path.join(
+                        './wp-export/uploads/',
+                        allMedia[key]
+                    ); //'./wp-export/uploads' + "2021/03/pea-tendrils.jpg"
+                    if (fs.existsSync(filepath)) {
+                        const filename = slugify(
+                            path.parse(allMedia[key]).name
+                        );
+                        const file = fs.createReadStream(filepath);
+                        formData.append(
+                            `files.comparison[${i}].img`,
+                            file,
+                            filename
+                        );
+                    } else {
+                        // console.log('DOES NOT EXIST !!!! 😡');
+                        // console.log(filepath);
+                        // console.log('\n');
+                    }
+                }
                 return item;
             });
         }
         if (detailedReviews.length > 0) {
             data.detailedReviews = detailedReviews;
             detailedReviews.map((item, i) => {
-                console.log(item);
-                const key = item.img.src;
-                const filepath = path.join(
-                    './wp-export/uploads/',
-                    allMedia[key]
-                );
-                const filename = slugify(path.parse(allMedia[key]).name);
-                const file = fs.createReadStream(filepath);
-                formData.append(
-                    `files.detailedReviews[${i}].img`,
-                    file,
-                    filename
-                );
+                try {
+                    const key = item.img.src;
+                    if (key && allMedia[key]) {
+                        const filepath = path.join(
+                            './wp-export/uploads/',
+                            allMedia[key]
+                        );
+                        if (fs.existsSync(filepath)) {
+                            // console.log('DETAILED REVIEW IMG EXISTS !!!! 👍');
+                            // console.log(filepath);
+                            const filename = slugify(
+                                path.parse(allMedia[key]).name
+                            );
+                            const file = fs.createReadStream(filepath);
+                            formData.append(
+                                `files.detailedReviews[${i}].img`,
+                                file,
+                                filename
+                            );
+                        } else {
+                            // console.log('\n');
+                            // console.log(
+                            //     'DETAILED REVIEW IMG NOT EXIST !!!! 😡'
+                            // );
+                            // console.log(filepath);
+                            // console.log('\n');
+                        }
+                    }
+                } catch (error) {
+                    console.log('error with index: ', i);
+                    console.log(detailedReviews[i]);
+                    console.log(error);
+                }
+
                 // console.log(item);
                 return item;
             });
@@ -132,21 +281,28 @@ const postBlogData = async (a, blogData, categories) => {
 
         formData.append('data', JSON.stringify(data));
         const key = attributes.featuredImg.key;
-        const filepath = path.join('./wp-export/uploads/', allMedia[key]);
-        const filename = slugify(path.parse(allMedia[key]).name);
-        const file = fs.createReadStream(filepath);
-        // https://developer.mozilla.org/en-US/docs/Web/API/FormData/append
-        formData.append('files.featuredImg', file, filename);
+        if (allMedia[key]) {
+            const filepath = path.join('./wp-export/uploads/', allMedia[key]);
+            const filename = slugify(path.parse(allMedia[key]).name);
+            const file = fs.createReadStream(filepath);
+            // https://developer.mozilla.org/en-US/docs/Web/API/FormData/append
+            if (fs.existsSync(filepath)) {
+                formData.append('files.featuredImg', file, filename);
+            }
+        }
 
-        const res = await fetch('http://localhost:1337/api/blogs', {
+        const res = await fetch(strapiUrl + '/api/blogs', {
             method: 'POST',
             body: formData,
             // headers: { 'Content-Type': 'application/json' },
         });
         const json = await res.json();
-        console.log(json);
     } catch (error) {
         console.log(a.slug);
+        console.log('ERROR WITH CREATE');
+        console.error(error);
+        console.log(error);
+        //  console.log(blogData.detailedReviews);
         createHtmlFileFromSlug(a.slug);
         throw error;
     }
@@ -247,144 +403,61 @@ const importPosts = async (doUpdates) => {
     // import posts
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    let existingPosts = (await _axios.get('/api/blogs')).data.data;
-    // console.log(existingPosts);
-    const urlSubstitutions = {};
-    // check published status first
-    // attach author
-    // return blocks and components and h1 from the scraper
-    // for featured image, add this file during blog creation
-    // for component images, add file in blog creation
-    // for 'in-blog' images, add during the creation of blocks
-    // add h1 as metaTitle during blog creation
-    // .slice(0, 1)
-    //best-planer-thicknesser-reviews
-    // best-mig-welders-reviews
-    // electric-to-thermostatic-shower
-    // best-router-tables-reviews
-    // handheld-steam-cleaner
-    // how-to-clean-a-couch-with-a-steam-cleaner
-    // 6-reasons-why-clothes-smell-when-you-air-dry-them
-    // 4-reasons-why-your-home-cctv-dvr-keeps-freezing
-    // petrol-lawn-mowers-how-to-choose-a-mower
-    // water-softeners
-    // best-window-cleaning-vac-reviews
+    let existingPosts = (await _axios.get('/api/blogs')).data.data.map((a) => ({
+        slug: a.attributes.slug,
+        id: a.id,
+    }));
     const publishedPosts = wpPosts.filter((a) => a.status === 'publish');
+    let count = 117;
     const mappedPosts = await publishedPosts
-        .slice(0, 10)
+        .slice(117)
         .reduce(async (prev, a) => {
-            const acc = await prev;
+            try {
+                const acc = await prev;
+                const postWpCategories = a.categoryIds;
+                // 2. Get find the corresponding slug for this id
+                const wpCategorySlugs = wpCategories.reduce((acc, cat) => {
+                    if (postWpCategories.includes(cat.id)) acc.push(cat.slug);
+                    return acc;
+                }, []);
+                // 3. Get existing categories from strapi
+                let existingCategories = (await _axios.get('/api/categories'))
+                    .data.data;
+                // 4. create an array of strapi category ids
+                const categories = existingCategories.reduce((acc, cat) => {
+                    if (wpCategorySlugs.includes(cat.attributes.slug))
+                        acc.push(cat.id);
+                    return acc;
+                }, []);
+                console.log('Attempting to map data for slug ', a.slug);
+                const blogData = await parseEncodedContent(
+                    a.encodedContent,
+                    a.slug
+                );
+                const exists = existingPosts.filter((b) => b.slug === a.slug);
+                if (exists.length > 0) {
+                    await updateBlogData(a, blogData, categories, exists[0].id);
+                    count++;
+                } else {
+                    await postBlogData(a, blogData, categories);
+                    count++;
+                }
+                //if (a.slug === 'air-conditioning-unit') {
+                // createHtmlFileFromSlug(a.slug);
+                // 1.Get category ids for this post
 
-            // if (a.slug === 'best-mig-welders-reviews') {
-            // createHtmlFileFromSlug(a.slug);
-            // 1.Get category ids for this post
-            const postWpCategories = a.categoryIds;
-            // 2. Get find the corresponding slug for this id
-            const wpCategorySlugs = wpCategories.reduce((acc, cat) => {
-                if (postWpCategories.includes(cat.id)) acc.push(cat.slug);
+                //}
+                console.log('Published post with index: ', count);
                 return acc;
-            }, []);
-            // 3. Get existing categories from strapi
-            let existingCategories = (await _axios.get('/api/categories')).data
-                .data;
-            // 4. create an array of strapi category ids
-            const categories = existingCategories.reduce((acc, cat) => {
-                if (wpCategorySlugs.includes(cat.attributes.slug))
-                    acc.push(cat.id);
+            } catch (error) {
+                createHtmlFileFromSlug(a.slug);
                 return acc;
-            }, []);
-            const blogData = await parseEncodedContent(
-                a.encodedContent,
-                a.slug
-            );
-            await postBlogData(a, blogData, categories);
-            //}
-
-            // console.log(blogData);
-            // blocks
-            // featuredImg
-            // metaTitle
-            // tableComponent
-            // detailedRviews component
-            return acc;
+            }
         }, Promise.resolve([]));
+
     console.log(publishedPosts.length);
 
     console.log(`Attempting to import ${wpPosts.length} posts`);
-
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // update post tags & categories
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // existingPosts = (await _axios.get('/posts?_limit=-1')).data;
-    // const categories = (await _axios.get('/categories?_limit=-1')).data;
-    // const wpCategories = JSON.parse(
-    //     fs.readFileSync('./wp-export/categories.json', 'utf8')
-    // );
-    // const tags = (await _axios.get('/tags?_limit=-1')).data;
-    // const wpTags = JSON.parse(fs.readFileSync('./wp-export/tags.json', 'utf8'));
-    // let updatedPosts = 0;
-    // for (let wpPostIndex = 0; wpPostIndex < wpPosts.length; wpPostIndex++) {
-    //     const wpPost = wpPosts[wpPostIndex];
-    //     if (!wpPost.title) continue;
-    //     if (!wpPost.slug || wpPost.slug.length === 0)
-    //         wpPost.slug = slugify(wpPost.title);
-    //     const existing = existingPosts.find(
-    //         (t) => t.slug.toLowerCase() === wpPost.slug.toLowerCase()
-    //     );
-    //     const catIds = [];
-    //     const tagIds = [];
-    //     if (
-    //         existing &&
-    //         (!existing.categories || existing.categories.length === 0) &&
-    //         wpPost.categoryIds &&
-    //         wpPost.categoryIds.length > 0
-    //     ) {
-    //         for (let ci = 0; ci < wpPost.categoryIds.length; ci++) {
-    //             const wpCatSlug = (
-    //                 wpCategories.find((g) => g.id === wpPost.categoryIds[ci]) ||
-    //                 {}
-    //             ).slug;
-    //             if (wpCatSlug) {
-    //                 const cat = categories.find((s) => wpCatSlug === s.slug);
-    //                 if (cat && cat.id) catIds.push(cat.id);
-    //             }
-    //         }
-    //     }
-    //     if (
-    //         existing &&
-    //         (!existing.tags || existing.tags.length === 0) &&
-    //         wpPost.tagIds &&
-    //         wpPost.tagIds.length > 0
-    //     ) {
-    //         for (let ci = 0; ci < wpPost.tagIds.length; ci++) {
-    //             const wpTagSlug = (
-    //                 wpTags.find((g) => g.id === wpPost.tagIds[ci]) || {}
-    //             ).slug;
-    //             if (wpTagSlug) {
-    //                 const tag = tags.find((s) => wpTagSlug === s.slug);
-    //                 if (tag && tag.id) tagIds.push(tag.id);
-    //             }
-    //         }
-    //     }
-    //     if (catIds.length) {
-    //         existing.categories = catIds.map((id) => {
-    //             return { id };
-    //         });
-    //     }
-    //     if (tagIds.length) {
-    //         existing.tags = tagIds.map((id) => {
-    //             return { id };
-    //         });
-    //     }
-    //     if (catIds.length || tagIds.length) {
-    //         await _put('/posts/' + existing.id, existing);
-    //         updatedPosts++;
-    //     }
-    // }
-    //console.log(`  Updated ${updatedPosts} posts with tags and categories`);
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // update post comments
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
 };
 
 importPosts();
