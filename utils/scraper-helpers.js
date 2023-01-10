@@ -5,6 +5,8 @@ const {
     uploadMedia,
     filterOnlyTags,
     formatAnchor,
+    replaceNumbers,
+    downloadAmzImg,
 } = require('./helpers');
 const headers = ['h2', 'h3', 'h4', 'h5', 'h6'];
 
@@ -437,7 +439,7 @@ const createProductComparisonTable = async ({ obj }) => {
     return new Promise((resolve) => resolve(comparison));
 };
 
-const extractRequiredData = async ({ obj }, item) => {
+const extractImgAndLink = async ({ obj }, item) => {
     const findData = async ({ obj }) => {
         const currentName = obj.name || null;
         const currentType = obj.type || null;
@@ -452,15 +454,17 @@ const extractRequiredData = async ({ obj }, item) => {
             if (currentType === 'tag') {
                 if (currentName === 'img') {
                     const { src, alt } = obj.attribs;
-                    const excluded = ['Star', 'Rating'];
-                    if (src) {
+                    const excluded = ['Star Rating'];
+                    if (src.includes('dreamyhome.co.uk/wp-content')) {
                         const check = excluded.reduce((acc, item) => {
                             if (alt.includes(item) || alt === '') acc = false;
                             return acc;
                         }, true);
-                        if (check) {
-                            item.img = { key: src, alt };
-                        }
+                        if (check) item.img = { src, alt };
+                    } else if (src.includes('media-amazon')) {
+                        // if image is hosted by amazon
+                        await downloadAmzImg(src);
+                        item.img = { src, alt };
                     }
                 }
                 if (currentName === 'a') {
@@ -474,18 +478,13 @@ const extractRequiredData = async ({ obj }, item) => {
             // FORMAT TEXT ELEMENTS
             if (currentType === 'text') {
                 const replacedData = formatText(data);
-                console.log('found');
-                console.log('parentName: ', parentName);
-                console.log('GrandparentName: ', grandParentName);
-                if (
-                    parentName === 'a' &&
-                    grandParentName === 'h2' &&
-                    replacedData
-                    //&&
-                    // item.title === ''
-                ) {
-                    console.log('');
-                    item.title = replacedData;
+                if (replacedData) {
+                    if (replacedData.includes('amazon fields=')) {
+                        const text = formatText(replacedData)
+                            .split(' ')[1]
+                            .split('"')[1];
+                        item.amazonCode = text;
+                    }
                 }
             }
             if (obj && obj.children && obj.children.length > 0) {
@@ -514,27 +513,286 @@ const extractRequiredData = async ({ obj }, item) => {
     await findData({ obj });
     return new Promise((resolve) => resolve(true));
 };
+const extractComponentHeaders = async ({ obj }, item) => {
+    const findData = async ({ obj }) => {
+        const currentName = obj.name || null;
+        const currentType = obj.type || null;
+        const parentName = obj.parent ? obj.parent.name : null;
+        const parentType = obj.parent ? obj.parent.type : null;
+        const grandParentName =
+            obj.parent && obj.parent.parent ? obj.parent.parent.name : null;
+        const greatGrandParentName =
+            obj.parent && obj.parent.parent && obj.parent.parent.parent
+                ? obj.parent.parent.parent.name
+                : null;
+        const data = obj.data || null;
+
+        try {
+            // FORMAT TAG ELEMENTS
+            if (currentType === 'tag') {
+                if (currentName === 'h2') {
+                    if (item.titleText === '') {
+                        if (obj.attribs.id) {
+                            item.titleAnchor = obj.attribs.id;
+                        }
+                    } else {
+                        if (obj.attribs.id) {
+                            item.subtitleAnchor = obj.attribs.id;
+                        }
+                    }
+                }
+                if (currentName === 'h3') {
+                    if (item.titleAnchor === '') {
+                        if (obj.attribs.id) {
+                            item.titleAnchor = obj.attribs.id;
+                        }
+                    } else {
+                        if (obj.attribs.id) {
+                            item.subtitleAnchor = obj.attribs.id;
+                        }
+                    }
+                }
+            }
+            // FORMAT TEXT ELEMENTS
+            if (currentType === 'text') {
+                const replacedData = formatText(data);
+                if (replacedData) {
+                    if (parentName === 'a') {
+                        if (
+                            grandParentName === 'h2' ||
+                            grandParentName === 'h3'
+                        ) {
+                            item.titleText = replaceNumbers(replacedData);
+                        }
+                        if (
+                            grandParentName === 'strong' &&
+                            (greatGrandParentName === 'h2' ||
+                                greatGrandParentName === 'h3')
+                        ) {
+                            item.titleText = replaceNumbers(replacedData);
+                        }
+                    }
+                    if (parentName === 'h3' || parentName === 'h2') {
+                        if (item.title === '') {
+                            item.titleText = replacedData;
+                        } else {
+                            item.subtitleText = replacedData;
+                        }
+                    }
+                    if (
+                        parentName === 'strong' &&
+                        grandParentName === 'a' &&
+                        (greatGrandParentName === 'h2' ||
+                            greatGrandParentName === 'h3')
+                    ) {
+                        item.titleText = item.titleText.concat(
+                            replaceNumbers(replacedData)
+                        );
+                    }
+                }
+            }
+            if (obj && obj.children && obj.children.length > 0) {
+                await obj.children.reduce(async (prev, a, i) => {
+                    const acc = await prev;
+                    await findData({
+                        obj: a,
+                    });
+                    return acc;
+                }, Promise.resolve());
+            }
+            return new Promise((resolve) => resolve(true));
+        } catch (error) {
+            console.log('FOUND ERROR WITH ELEMENT');
+            console.log('ERROR RETURNED: ', error);
+            console.log('current block: ');
+            logCurrentBlock(currentBlock);
+            console.log('current name: ', currentName);
+            console.log('current type: ', currentType);
+            console.log('parent name: ', parentName);
+            console.log('parent type: ', parentType);
+            console.log('data: ', data);
+            console.log('\n');
+        }
+    };
+    await findData({ obj });
+    return new Promise((resolve) => resolve(true));
+};
+const extractEbayLink = async ({ obj }, item) => {
+    const findData = async ({ obj }) => {
+        const currentName = obj.name || null;
+        const currentType = obj.type || null;
+        try {
+            // FORMAT TAG ELEMENTS
+            if (currentType === 'tag') {
+                if (currentName === 'a') {
+                    if (obj.attribs.href) {
+                        item.ebayLink = obj.attribs.href;
+                    }
+                }
+            }
+            if (obj && obj.children && obj.children.length > 0) {
+                await obj.children.reduce(async (prev, a, i) => {
+                    const acc = await prev;
+                    await findData({
+                        obj: a,
+                    });
+                    return acc;
+                }, Promise.resolve());
+            }
+            return new Promise((resolve) => resolve(true));
+        } catch (error) {
+            console.log('FOUND ERROR WITH ELEMENT');
+            console.log('ERROR RETURNED: ', error);
+        }
+    };
+    await findData({ obj });
+    return new Promise((resolve) => resolve(true));
+};
+const extractIndividualRating = async ({ obj }, item) => {
+    let name = '';
+    let value;
+    const findData = async ({ obj }) => {
+        const currentType = obj.type || null;
+        const parentName = obj.parent ? obj.parent.name : null;
+        const grandParentName =
+            obj.parent && obj.parent.parent ? obj.parent.parent.name : null;
+
+        const data = obj.data || null;
+
+        try {
+            // FORMAT TAG ELEMENTS
+            if (currentType === 'tag') {
+            }
+            // FORMAT TEXT ELEMENTS
+            if (currentType === 'text') {
+                const replacedData = formatText(data);
+                if (replacedData) {
+                    if (parentName === 'p') {
+                        if (
+                            obj.parent.attribs.class === 'rating_chart_number'
+                        ) {
+                            value = Number(replacedData);
+                        }
+                        if (!obj.parent.attribs.class) {
+                            name = name.concat(replacedData);
+                        }
+                    }
+                    if (parentName === 'span' && grandParentName === 'span') {
+                        name = replacedData;
+                    }
+                    if (parentName === 'span' && grandParentName === 'p') {
+                        name = replacedData;
+                    }
+                    if (parentName === 'span' && grandParentName === 'p') {
+                        name = replacedData;
+                    }
+                }
+            }
+            if (obj && obj.children && obj.children.length > 0) {
+                await obj.children.reduce(async (prev, a, i) => {
+                    const acc = await prev;
+                    await findData({
+                        obj: a,
+                    });
+                    return acc;
+                }, Promise.resolve());
+            }
+            return new Promise((resolve) => resolve(true));
+        } catch (error) {
+            console.log('FOUND ERROR WITH ELEMENT');
+            console.log('ERROR RETURNED: ', error);
+            // console.log('current block: ');
+            // logCurrentBlock(currentBlock);
+            // console.log('current name: ', currentName);
+            // console.log('current type: ', currentType);
+            // console.log('parent name: ', parentName);
+            // console.log('parent type: ', parentType);
+            // console.log('data: ', data);
+            // console.log('\n');
+        }
+    };
+    await findData({ obj });
+    return new Promise((resolve) => resolve({ name, value }));
+};
+const extractRatings = async ({ obj }, item) => {
+    const findData = async ({ obj }) => {
+        const currentName = obj.name || null;
+        const currentType = obj.type || null;
+        const parentName = obj.parent ? obj.parent.name : null;
+        const data = obj.data || null;
+
+        try {
+            // FORMAT TAG ELEMENTS
+            if (
+                currentName === 'div' &&
+                obj.attribs.class.includes('rating_bar_')
+            ) {
+                const res = await extractIndividualRating({ obj }, item);
+                item.ratings[res.name] = res.value;
+                return new Promise((resolve) => resolve(true));
+            }
+            if (currentType === 'tag') {
+            }
+            // FORMAT TEXT ELEMENTS
+            if (currentType === 'text') {
+                const replacedData = formatText(data);
+                if (replacedData) {
+                    if (parentName === 'p') {
+                        if (
+                            obj.parent.attribs.class ===
+                            'rating_chart_score_top'
+                        ) {
+                            item.overallScore = Number(replacedData);
+                        }
+                    }
+                }
+            }
+            if (obj && obj.children && obj.children.length > 0) {
+                await obj.children.reduce(async (prev, a, i) => {
+                    const acc = await prev;
+                    await findData({
+                        obj: a,
+                    });
+                    return acc;
+                }, Promise.resolve());
+            }
+            return new Promise((resolve) => resolve(true));
+        } catch (error) {
+            console.log('FOUND ERROR WITH ELEMENT');
+            console.log('ERROR RETURNED: ', error);
+            // console.log('current block: ');
+            // logCurrentBlock(currentBlock);
+            // console.log('current name: ', currentName);
+            // console.log('current type: ', currentType);
+            // console.log('parent name: ', parentName);
+            // console.log('parent type: ', parentType);
+            // console.log('data: ', data);
+            // console.log('\n');
+        }
+    };
+    await findData({ obj });
+    return new Promise((resolve) => resolve(true));
+};
 
 const createDetailedReview = async ({ obj }) => {
     const item = {
-        title: '',
-        subtitle: '',
+        titleText: '',
+        titleAnchor: '',
+        subtitleText: '',
+        subtitleAnchor: '',
         img: {
             src: '',
             alt: '',
         },
-        rank: 0,
         amazonCode: '',
         amazonLink: '',
         ebayLink: '',
         body: [],
+        overallScore: 0,
         ratings: {},
     };
     let blocks = [];
-    blocks.push({
-        type: 'paragraph',
-        data: { text: '[DETAILED_PRODUCT_REVIEWS]' },
-    });
+
     const createDOMStructure = async ({ obj }) => {
         //wp-block-group product-details-group
         const currentName = obj.name || null;
@@ -561,7 +819,7 @@ const createDetailedReview = async ({ obj }) => {
                 obj.attribs.class === 'wp-block-columns product-details-col'
             ) {
                 // This contains the image and amazon link
-                const img = await extractRequiredData({ obj }, item);
+                await extractImgAndLink({ obj }, item);
                 // some also contain [amazon fields="B00EJFFDXG" value="price"]
                 // with class="product-details-price"
                 // exmaple best-warming-drawer-reviews
@@ -570,10 +828,12 @@ const createDetailedReview = async ({ obj }) => {
             }
             if (currentName === 'h2') {
                 // this contains the title with id and amazon link
+                await extractComponentHeaders({ obj }, item);
                 return new Promise((resolve) => resolve(true));
             }
             if (currentName === 'h3') {
                 // this contains the subtitle with id
+                await extractComponentHeaders({ obj }, item);
                 return new Promise((resolve) => resolve(true));
             }
             if (
@@ -581,10 +841,12 @@ const createDetailedReview = async ({ obj }) => {
                 obj.attribs.class === 'wp-block-group rating_chart_score_group'
             ) {
                 // This contains the ratings (need to have dynamic fields as rating categories change)
+                await extractRatings({ obj }, item);
                 return new Promise((resolve) => resolve(true));
             }
             if (currentName === 'p' && obj.attribs.class === 'ebay-btn') {
                 // This contains the ebay link
+                await extractEbayLink({ obj }, item);
                 return new Promise((resolve) => resolve(true));
             }
             // FORMAT TAG ELEMENTS
@@ -596,6 +858,14 @@ const createDetailedReview = async ({ obj }) => {
                     }
                 }
                 if (currentName === 'p') {
+                    blocks.push({
+                        type: 'paragraph',
+                        data: {
+                            text: '',
+                        },
+                    });
+                }
+                if (currentName === 'br') {
                     blocks.push({
                         type: 'paragraph',
                         data: {
@@ -883,16 +1153,26 @@ const createDetailedReview = async ({ obj }) => {
             item.data.text.includes('View Product on Amazon')
         ) {
             return acc;
+        } else if (
+            item.type === 'paragraph' &&
+            (item.data.text === '' || item.data.text === ' ')
+        ) {
+            return acc;
         } else {
             acc.push(item);
             return acc;
         }
     }, []);
-    item.body = blocks;
-    console.log(item);
+
+    //  blocks.map((a) => logCurrentBlock(a));
+    item.body = JSON.stringify({
+        time: 1661158170133,
+        version: '2.23.2',
+        blocks: blocks,
+    });
     // blocks.map((a) => logCurrentBlock(a));
 
-    return new Promise((resolve) => resolve(true));
+    return new Promise((resolve) => resolve(item));
 };
 
 module.exports = {

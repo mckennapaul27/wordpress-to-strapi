@@ -4,11 +4,14 @@ const fs = require('fs');
 const { default: slugify } = require('slugify');
 const moment = require('moment');
 const _trim = require('lodash.trim');
+const downloader = require('image-downloader');
+const { lastIndexOf } = require('lodash');
 require('dotenv').config();
 
 const manifest = JSON.parse(
     fs.readFileSync('./wp-export/uploads/manifest.json', 'utf8')
 );
+
 const allMedia = manifest.allImages;
 // const slugify = (string) => {
 //     const a =
@@ -115,8 +118,9 @@ const uploadMedia = async (obj) => {
 };
 
 const writeObjToFile = (path, obj) => {
-    let str = typeof obj === 'string' ? obj : JSON.stringify(obj, null, '  ');
-    fs.writeFileSync(path, str, 'utf8');
+    let newStr =
+        typeof obj === 'string' ? obj : JSON.stringify(obj, null, '  ');
+    fs.writeFileSync(path, newStr, 'utf8');
 };
 
 const createHtmlFileFromSlug = async (slug) => {
@@ -207,6 +211,95 @@ const addMissingFeaturedImg = (domList, blocks, attributes) => {
     }
 };
 
+const replaceNumbers = (str) => {
+    let newStr = str;
+    newStr = newStr.replace('1. ', '');
+    newStr = newStr.replace('2. ', '');
+    newStr = newStr.replace('3. ', '');
+    newStr = newStr.replace('4. ', '');
+    newStr = newStr.replace('5. ', '');
+    newStr = newStr.replace('6. ', '');
+    newStr = newStr.replace('7. ', '');
+    newStr = newStr.replace('8. ', '');
+    newStr = newStr.replace('9. ', '');
+    newStr = newStr.replace('10. ', '');
+    newStr = newStr.replace('11. ', '');
+    newStr = newStr.replace('12. ', '');
+    newStr = newStr.replace('13. ', '');
+    newStr = newStr.replace('14. ', '');
+    newStr = newStr.replace('15. ', '');
+    newStr = newStr.replace('16. ', '');
+    newStr = newStr.replace('17. ', '');
+    newStr = newStr.replace('18. ', '');
+    newStr = newStr.replace('19. ', '');
+    newStr = newStr.replace('20. ', '');
+    newStr = newStr.replace('21. ', '');
+    newStr = newStr.replace('22. ', '');
+    newStr = newStr.replace('23. ', '');
+    newStr = newStr.replace('24. ', '');
+    newStr = newStr.replace('25. ', '');
+
+    newStr = newStr.replace('1.', '');
+    newStr = newStr.replace('2.', '');
+    newStr = newStr.replace('3.', '');
+    newStr = newStr.replace('4.', '');
+    newStr = newStr.replace('5.', '');
+    newStr = newStr.replace('6.', '');
+    newStr = newStr.replace('7.', '');
+    newStr = newStr.replace('8.', '');
+    newStr = newStr.replace('9.', '');
+    newStr = newStr.replace('10.', '');
+    newStr = newStr.replace('11.', '');
+    newStr = newStr.replace('12.', '');
+    newStr = newStr.replace('13.', '');
+    newStr = newStr.replace('14.', '');
+    newStr = newStr.replace('15.', '');
+    newStr = newStr.replace('16.', '');
+    newStr = newStr.replace('17.', '');
+    newStr = newStr.replace('18.', '');
+    newStr = newStr.replace('19.', '');
+    newStr = newStr.replace('20.', '');
+    newStr = newStr.replace('21.', '');
+    newStr = newStr.replace('22.', '');
+    newStr = newStr.replace('23.', '');
+    newStr = newStr.replace('24.', '');
+    newStr = newStr.replace('25.', '');
+
+    return newStr;
+};
+
+const downloadAmzImg = async (src) => {
+    try {
+        const outputDir = './wp-export/';
+        const uploadsDir = path.join(outputDir, 'uploads');
+        const manifest = JSON.parse(
+            fs.readFileSync('./wp-export/uploads/manifest.json', 'utf8')
+        );
+        const allImages = manifest.allImages;
+        const allUrls = manifest.allUrls;
+        const name = formatAmzImgName(src);
+        allImages[src] = name;
+        const dest = path.join(outputDir, 'uploads', 'amazon-images');
+        fs.mkdirSync(dest, { recursive: true });
+        const { filename } = await downloader.image({
+            url: src,
+            dest,
+        });
+        await writeObjToFile(path.join(uploadsDir, 'manifest.json'), {
+            allImages,
+            allUrls,
+        });
+        return new Promise((resolve) => resolve(true));
+    } catch (error) {
+        console.log('Error uploading amazon img');
+        console.log(error);
+    }
+};
+//
+
+const formatAmzImgName = (url) =>
+    'amazon-images/' + url.slice(url.lastIndexOf('/') + 1);
+
 // // formatting & replacing
 // ' .'
 // '-A' >> '- A'
@@ -226,4 +319,6 @@ module.exports = {
     logCurrentBlock,
     formatHref,
     addMissingFeaturedImg,
+    replaceNumbers,
+    downloadAmzImg,
 };

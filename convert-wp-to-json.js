@@ -236,69 +236,69 @@ site.postTypes.forEach((postType) => {
 console.log('completed parsing data (not images).');
 console.log('Starting image mapping..');
 
-// if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 
-// const allImages = {};
-// allUrls.forEach((u) => {
-//     const wpUploadBase = site.baseUrl + '/wp-content/uploads/';
-//     if (
-//         u.length <= wpUploadBase.length ||
-//         u.substring(0, wpUploadBase.length) !== wpUploadBase // removes https://www.dreamyhome.co.uk/wp-content/uploads/
-//     )
-//         return;
-//     if (
-//         !isImageUrl(u) &&
-//         !u.includes('.pdf') &&
-//         !u.includes('.doc') &&
-//         !u.includes('.docx') &&
-//         !u.includes('.xls') &&
-//         !u.includes('.xlsx')
-//     )
-//         return;
+const allImages = {};
+allUrls.forEach((u) => {
+    const wpUploadBase = site.baseUrl + '/wp-content/uploads/';
+    if (
+        u.length <= wpUploadBase.length ||
+        u.substring(0, wpUploadBase.length) !== wpUploadBase // removes https://www.dreamyhome.co.uk/wp-content/uploads/
+    )
+        return;
+    if (
+        !isImageUrl(u) &&
+        !u.includes('.pdf') &&
+        !u.includes('.doc') &&
+        !u.includes('.docx') &&
+        !u.includes('.xls') &&
+        !u.includes('.xlsx')
+    )
+        return;
 
-//     const localImage = u.substring(wpUploadBase.length);
-//     allImages[u] = localImage;
-// });
+    const localImage = u.substring(wpUploadBase.length);
+    allImages[u] = localImage;
+});
 
-// writeObjToFile(path.join(uploadsDir, 'manifest.json'), { allImages, allUrls }); // './wp-export/uploads/manifest.json'
+writeObjToFile(path.join(uploadsDir, 'manifest.json'), { allImages, allUrls }); // './wp-export/uploads/manifest.json'
 
-// async function downloadImages() {
-//     for (const imgUrl in allImages) {
-//         console.log(' >>>>>>>>> NEXT <<<<<<<<<<<<,,');
-//         if (allImages.hasOwnProperty(imgUrl)) {
-//             const localImage = allImages[imgUrl];
-//             console.log('LOCAL_IMAGE', localImage);
-//             const localImagePath = path.join(uploadsDir, localImage); //'./wp-export/uploads' + "2021/03/pea-tendrils.jpg"
-//             console.log('LOCAL_IMAGE_PATH', localImagePath);
-//             if (!fs.existsSync(localImagePath)) {
-//                 const localImageDir = path.dirname(localImagePath); // './wp-export/uploads/2021/03
-//                 console.log('LOCAL_IMAGE_DIRECTORY', localImageDir);
-//                 try {
-//                     fs.mkdirSync(localImageDir, { recursive: true });
-//                     console.log('IMG_URL', imgUrl);
-//                     const dest = path.join(outputDir, 'uploads', localImage);
-//                     console.log('DEST', dest);
-//                     const { filename } = await download.image({
-//                         url: imgUrl,
-//                         dest,
-//                     });
-//                     console.log(`Image downloaded: ${filename}`);
-//                 } catch (e) {
-//                     console.error(`Download error: ${e}`);
-//                     if (e.message.indexOf('404') > -1) {
-//                         const pl = `images/placeholder${path.extname(
-//                             localImagePath
-//                         )}`;
-//                         console.log(
-//                             `Copying placeholder from ${pl} to ${localImagePath}`
-//                         );
-//                         fs.copyFileSync(pl, localImagePath);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     console.log('Images all downloaded');
-// }
+async function downloadImages() {
+    for (const imgUrl in allImages) {
+        console.log(' >>>>>>>>> NEXT <<<<<<<<<<<<,,');
+        if (allImages.hasOwnProperty(imgUrl)) {
+            const localImage = allImages[imgUrl];
+            console.log('LOCAL_IMAGE', localImage);
+            const localImagePath = path.join(uploadsDir, localImage); //'./wp-export/uploads' + "2021/03/pea-tendrils.jpg"
+            console.log('LOCAL_IMAGE_PATH', localImagePath);
+            if (!fs.existsSync(localImagePath)) {
+                const localImageDir = path.dirname(localImagePath); // './wp-export/uploads/2021/03
+                console.log('LOCAL_IMAGE_DIRECTORY', localImageDir);
+                try {
+                    fs.mkdirSync(localImageDir, { recursive: true });
+                    console.log('IMG_URL', imgUrl);
+                    const dest = path.join(outputDir, 'uploads', localImage);
+                    console.log('DEST', dest);
+                    const { filename } = await download.image({
+                        url: imgUrl,
+                        dest,
+                    });
+                    console.log(`Image downloaded: ${filename}`);
+                } catch (e) {
+                    console.error(`Download error: ${e}`);
+                    if (e.message.indexOf('404') > -1) {
+                        const pl = `images/placeholder${path.extname(
+                            localImagePath
+                        )}`;
+                        console.log(
+                            `Copying placeholder from ${pl} to ${localImagePath}`
+                        );
+                        fs.copyFileSync(pl, localImagePath);
+                    }
+                }
+            }
+        }
+    }
+    console.log('Images all downloaded');
+}
 
-// downloadImages();
+downloadImages();

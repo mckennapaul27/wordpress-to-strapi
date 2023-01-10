@@ -72,12 +72,13 @@ const _put = async (r, obj) => {
     }
 };
 
-const postBlogData = (a, blogData) => {
+const postBlogData = async (a, blogData, categories) => {
     try {
         const allMedia = manifest.allImages;
         const formData = new FormData();
-        const { attributes, editorjsData, comparison } = blogData;
-
+        const { attributes, editorjsData, comparison, detailedReviews } =
+            blogData;
+        //console.log(detailedReviews);
         const data = {
             metaData: {
                 title: attributes.title,
@@ -86,8 +87,11 @@ const postBlogData = (a, blogData) => {
             title: attributes.title,
             slug: a.slug,
             originalDate: a.postDate,
+            pubDate: a.pubDate,
             body: editorjsData,
             wpId: a.id,
+            author: 1, // trying array
+            categories,
         };
         if (comparison) {
             data.comparison = comparison.items;
@@ -100,7 +104,27 @@ const postBlogData = (a, blogData) => {
                 const filename = slugify(path.parse(allMedia[key]).name);
                 const file = fs.createReadStream(filepath);
                 formData.append(`files.comparison[${i}].img`, file, filename);
-                return a;
+                return item;
+            });
+        }
+        if (detailedReviews.length > 0) {
+            data.detailedReviews = detailedReviews;
+            detailedReviews.map((item, i) => {
+                console.log(item);
+                const key = item.img.src;
+                const filepath = path.join(
+                    './wp-export/uploads/',
+                    allMedia[key]
+                );
+                const filename = slugify(path.parse(allMedia[key]).name);
+                const file = fs.createReadStream(filepath);
+                formData.append(
+                    `files.detailedReviews[${i}].img`,
+                    file,
+                    filename
+                );
+                // console.log(item);
+                return item;
             });
         }
 
@@ -114,15 +138,16 @@ const postBlogData = (a, blogData) => {
         // https://developer.mozilla.org/en-US/docs/Web/API/FormData/append
         formData.append('files.featuredImg', file, filename);
 
-        fetch('http://localhost:1337/api/blogs', {
+        const res = await fetch('http://localhost:1337/api/blogs', {
             method: 'POST',
             body: formData,
             // headers: { 'Content-Type': 'application/json' },
-        })
-            .then((res) => res.json())
-            .then((json) => console.log(json));
+        });
+        const json = await res.json();
+        console.log(json);
     } catch (error) {
-        console.log('error occurred: ', error);
+        console.log(a.slug);
+        createHtmlFileFromSlug(a.slug);
         throw error;
     }
 };
@@ -232,32 +257,48 @@ const importPosts = async (doUpdates) => {
     // for component images, add file in blog creation
     // for 'in-blog' images, add during the creation of blocks
     // add h1 as metaTitle during blog creation
+    // .slice(0, 1)
+    //best-planer-thicknesser-reviews
+    // best-mig-welders-reviews
+    // electric-to-thermostatic-shower
+    // best-router-tables-reviews
+    // handheld-steam-cleaner
+    // how-to-clean-a-couch-with-a-steam-cleaner
+    // 6-reasons-why-clothes-smell-when-you-air-dry-them
+    // 4-reasons-why-your-home-cctv-dvr-keeps-freezing
+    // petrol-lawn-mowers-how-to-choose-a-mower
+    // water-softeners
+    // best-window-cleaning-vac-reviews
     const publishedPosts = wpPosts.filter((a) => a.status === 'publish');
     const mappedPosts = await publishedPosts
-        // .slice(0, 1)
-        //best-planer-thicknesser-reviews
-        // best-mig-welders-reviews
-        // electric-to-thermostatic-shower
-        // best-router-tables-reviews
-        // handheld-steam-cleaner
-        // how-to-clean-a-couch-with-a-steam-cleaner
-        // 6-reasons-why-clothes-smell-when-you-air-dry-them
-        // 4-reasons-why-your-home-cctv-dvr-keeps-freezing
-        // petrol-lawn-mowers-how-to-choose-a-mower
-        // water-softeners
-        // best-window-cleaning-vac-reviews
-        .filter((a) => a.slug === 'best-window-cleaning-vac-reviews')
-        .slice(0, 1)
+        .slice(0, 10)
         .reduce(async (prev, a) => {
             const acc = await prev;
-            //createHtmlFileFromSlug(a.slug);
+
+            // if (a.slug === 'best-mig-welders-reviews') {
+            // createHtmlFileFromSlug(a.slug);
+            // 1.Get category ids for this post
+            const postWpCategories = a.categoryIds;
+            // 2. Get find the corresponding slug for this id
+            const wpCategorySlugs = wpCategories.reduce((acc, cat) => {
+                if (postWpCategories.includes(cat.id)) acc.push(cat.slug);
+                return acc;
+            }, []);
+            // 3. Get existing categories from strapi
+            let existingCategories = (await _axios.get('/api/categories')).data
+                .data;
+            // 4. create an array of strapi category ids
+            const categories = existingCategories.reduce((acc, cat) => {
+                if (wpCategorySlugs.includes(cat.attributes.slug))
+                    acc.push(cat.id);
+                return acc;
+            }, []);
             const blogData = await parseEncodedContent(
                 a.encodedContent,
                 a.slug
             );
-            //console.log(blogData);
-            // check if exists, if it does, update it instead
-            // await postBlogData(a, blogData);
+            await postBlogData(a, blogData, categories);
+            //}
 
             // console.log(blogData);
             // blocks
@@ -270,76 +311,10 @@ const importPosts = async (doUpdates) => {
     console.log(publishedPosts.length);
 
     console.log(`Attempting to import ${wpPosts.length} posts`);
-    // let newPosts = 0,
-    //     dupePosts = 0;
-    // for (let wpPostIndex = 0; wpPostIndex < wpPosts.length; wpPostIndex++) {
-    //     const wpPost = wpPosts[wpPostIndex];
-    //     if (!wpPost.title) continue;
-    //     const existing = existingPosts.find(
-    //         (t) => t.slug.toLowerCase() === wpPost.slug.toLowerCase()
-    //     );
-    //     const publish_date =
-    //         wpPost.pubDate && wpPost.pubDate.length > 0
-    //             ? moment.utc(wpPost.pubDate).toISOString()
-    //             : null;
-    //     const original_date =
-    //         wpPost.postDate && wpPost.postDate.length > 0
-    //             ? moment(wpPost.postDate).toISOString()
-    //             : null;
-    //     let markdown = wpPost.markdown || '';
-    //     let excerpt = wpPost.encodedExcerpt || '';
-    //     wpPost.urls.forEach((url) => {
-    //         if (urlSubstitutions[url]) {
-    //             markdown = markdown.replaceAll(url, urlSubstitutions[url]);
-    //             excerpt = excerpt.replaceAll(url, urlSubstitutions[url]);
-    //         }
-    //     });
-    //     const user =
-    //         users.find((u) => u.username === wpPost.creator) || defaultUser;
-    //     if (!existing) {
-    //         if (user) {
-    //             await _post('/posts', {
-    //                 slug: wpPost.slug,
-    //                 title: wpPost.title,
-    //                 body: markdown,
-    //                 excerpt: excerpt,
-    //                 publish_date,
-    //                 published: wpPost.status === 'publish',
-    //                 author: { id: user.id },
-    //                 original_date,
-    //                 wp_id: wpPost.id,
-    //             });
-    //             newPosts++;
-    //         } else {
-    //             missingUsers.push(wpPost.creator);
-    //         }
-    //     } else {
-    //         // update post
-    //         if (user) {
-    //             existing.title = wpPost.title;
-    //             existing.body = markdown;
-    //             existing.excerpt = excerpt;
-    //             existing.original_date = original_date;
-    //             existing.publish_date = publish_date;
-    //             existing.published = wpPost.status === 'publish';
-    //             existing.wp_id = wpPost.id;
-    //             if (doUpdates) await _put(`/posts/${existing.id}`, existing);
-    //         }
-    //         dupePosts++;
-    //     }
-    // }
-    // if (missingUsers.length > 0) {
-    //     console.log(
-    //         `  Unable to import posts due to ${missingUsers.length} missing users: `,
-    //         new Set(missingUsers).values()
-    //     );
-    // }
-    // console.log(
-    //     `  Imported ${newPosts} new posts, updated ${dupePosts} existing posts`
-    // );
-    // // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // // update post tags & categories
-    // // ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // update post tags & categories
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
     // existingPosts = (await _axios.get('/posts?_limit=-1')).data;
     // const categories = (await _axios.get('/categories?_limit=-1')).data;
     // const wpCategories = JSON.parse(
@@ -406,91 +381,10 @@ const importPosts = async (doUpdates) => {
     //         updatedPosts++;
     //     }
     // }
-    // console.log(`  Updated ${updatedPosts} posts with tags and categories`);
-    // // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // // update post comments
-    // // ++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // let existingComments = (await _axios.get('/comments?_limit=-1')).data;
-    // // drop all existing comments
-    // // for (let di = 0; di < existingComments.length; di++) {
-    // //   const dicm = existingComments[di];
-    // //   console.log("Deleting comment " + dicm.id);
-    // //   await _delete(`/comments/${dicm.id}`);
-    // // }
-    // // existingComments = (await _axios.get("/comments?_limit=-1")).data;
-    // console.log(`Attempting to upload comments to posts`);
-    // let commentsCount = 0;
-    // let commentErrors = 0;
-    // for (let wpPostIndex = 0; wpPostIndex < wpPosts.length; wpPostIndex++) {
-    //     const wpPost = wpPosts[wpPostIndex];
-    //     if (!wpPost.title) continue;
-    //     if (!wpPost.slug || wpPost.slug.length === 0)
-    //         wpPost.slug = slugify(wpPost.title);
-    //     const existing = existingPosts.find(
-    //         (t) => t.slug.toLowerCase() === wpPost.slug.toLowerCase()
-    //     );
-    //     if (!existing || !wpPost.comments || wpPost.comments.length === 0)
-    //         continue;
-
-    //     // does the post have comments
-    //     if (
-    //         existingComments.findIndex(
-    //             (c) => c.post && c.post.id === existing.id
-    //         ) > -1
-    //     ) {
-    //         continue; // no need to populate comments if they were already populated
-    //     }
-    //     const sComments = {};
-    //     // assumes that the list is in such an order where comments with parents always
-    //     // appear AFTER the parent comment itself in the enumeration
-    //     const lenWpComments = wpPost.comments.length;
-    //     for (let ci = 0; ci < lenWpComments; ci++) {
-    //         const wpComment = wpPost.comments[ci];
-    //         let user = null;
-    //         if (wpComment.userId && wpComment.userId > 0) {
-    //             const wpAuthor = wpAuthors.find(
-    //                 (a) => a.id === wpComment.userId
-    //             );
-    //             if (wpAuthor && wpAuthor.id > 0) {
-    //                 const eUser =
-    //                     users.find((u) => u.username === wpAuthor.login) ||
-    //                     defaultUser;
-    //                 if (eUser) user = { id: eUser.id };
-    //             }
-    //         }
-    //         const parent =
-    //             wpComment.parentId && wpComment.parentId > 0
-    //                 ? sComments[`c-${wpComment.parentId}`]
-    //                 : null;
-    //         let newComment = {
-    //             author: wpComment.author,
-    //             author_email: wpComment.authorEmail,
-    //             author_url: wpComment.authorUrl,
-    //             author_ip: wpComment.authorIp,
-    //             approved: wpComment.approved,
-    //             comment_type: wpComment.type,
-    //             comment_date: wpComment.date,
-    //             body: turndownService.turndown(wpComment.content),
-    //             parent,
-    //             post: { id: existing.id },
-    //             user,
-    //         };
-    //         try {
-    //             newComment = await _post('/comments', newComment);
-    //             sComments[`c-${wpComment.id}`] = { id: newComment.id };
-    //             commentsCount++;
-    //         } catch {
-    //             commentErrors++;
-    //             console.log(
-    //                 'unable to post comment',
-    //                 JSON.stringify(newComment)
-    //             );
-    //         }
-    //     }
-    // }
-    // console.log(
-    //     `  Added ${commentsCount} post comments, ${commentErrors} post errors`
-    // );
+    //console.log(`  Updated ${updatedPosts} posts with tags and categories`);
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // update post comments
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++
 };
 
 importPosts();

@@ -102,7 +102,17 @@ const parseEncodedContent = async (html, slug) => {
                 console.log(
                     'Has found classname: "wp-block-group product-details-group"'
                 );
-                await createDetailedReview({ obj });
+                if (detailedReviews.length === 0) {
+                    blocks.push({
+                        type: 'paragraph',
+                        data: { text: '[DETAILED_PRODUCT_REVIEWS]' },
+                    });
+                }
+                const review = await createDetailedReview({ obj });
+                if (review) {
+                    detailedReviews.push(review);
+                }
+
                 return new Promise((resolve) => resolve(true));
             }
             if (
@@ -458,6 +468,7 @@ const parseEncodedContent = async (html, slug) => {
             attributes,
             editorjsData,
             comparison,
+            detailedReviews,
         })
     );
 };
