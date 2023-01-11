@@ -89,7 +89,7 @@ const parseEncodedContent = async (html, slug) => {
                 currentName === 'div' &&
                 obj.attribs.class === 'wp-block-group product-table-group'
             ) {
-                comparison = await createProductComparisonTable({ obj });
+                comparison = await createProductComparisonTable({ obj }, slug);
                 blocks.push({
                     type: 'paragraph',
                     data: { text: '[PRODUCT_COMPARISON]' },
@@ -109,7 +109,7 @@ const parseEncodedContent = async (html, slug) => {
                         data: { text: '[DETAILED_PRODUCT_REVIEWS]' },
                     });
                 }
-                const review = await createDetailedReview({ obj });
+                const review = await createDetailedReview({ obj }, slug);
                 if (review) {
                     detailedReviews.push(review);
                 }
@@ -135,7 +135,8 @@ const parseEncodedContent = async (html, slug) => {
                     if (
                         strongChild &&
                         strongChild.data &&
-                        strongChild.data.includes('Our Top 3')
+                        strongChild.data.includes('Our Top 3') &&
+                        obj.children.length > 1
                     ) {
                         const top3Block = await createTop3List({ obj }, slug);
                         await top3Block.reduce(async (prev, a) => {
@@ -163,6 +164,14 @@ const parseEncodedContent = async (html, slug) => {
                         },
                     });
                 }
+                if (currentName === 'figcaption') {
+                    blocks.push({
+                        type: 'paragraph',
+                        data: {
+                            text: '',
+                        },
+                    });
+                }
                 if (headers.includes(currentName)) {
                     const { id } = obj.attribs;
                     blocks.push({
@@ -182,6 +191,11 @@ const parseEncodedContent = async (html, slug) => {
                 if (currentName === 'a') {
                     const { href, target, rel } = obj.attribs;
                     if (parentName === 'p') {
+                        currentBlock.data.text = currentBlock.data.text.concat(
+                            ` <a href="${formatHref(href)}">`
+                        );
+                    }
+                    if (parentName === 'figcaption') {
                         currentBlock.data.text = currentBlock.data.text.concat(
                             ` <a href="${formatHref(href)}">`
                         );
@@ -295,6 +309,10 @@ const parseEncodedContent = async (html, slug) => {
                     currentBlock.data.text = currentBlock.data.text.concat(
                         space + replacedData
                     );
+                }
+                if (parentName === 'figcaption' && replacedData) {
+                    currentBlock.data.text =
+                        currentBlock.data.text.concat(replacedData);
                 }
                 if (parentName === 'a' && replacedData) {
                     const granny =

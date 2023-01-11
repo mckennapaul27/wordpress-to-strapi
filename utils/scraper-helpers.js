@@ -148,7 +148,7 @@ const createFeaturedImgReviewPage = async ({ obj }, attributes) => {
     return new Promise((resolve) => resolve(true));
 };
 
-const createProductComparisonTable = async ({ obj }) => {
+const createProductComparisonTable = async ({ obj }, slug) => {
     const comparison = {
         title: { text: '', anchor: '' },
         items: [
@@ -459,7 +459,7 @@ const createProductComparisonTable = async ({ obj }) => {
     return new Promise((resolve) => resolve(comparison));
 };
 
-const extractImgAndLink = async ({ obj }, item) => {
+const extractImgAndLink = async ({ obj }, item, slug) => {
     const findData = async ({ obj }) => {
         const currentName = obj.name || null;
         const currentType = obj.type || null;
@@ -489,7 +489,10 @@ const extractImgAndLink = async ({ obj }, item) => {
                 }
                 if (currentName === 'a') {
                     if (obj.attribs) {
-                        if (obj.attribs.href.startsWith('https://www.amazo')) {
+                        if (
+                            obj.attribs.href &&
+                            obj.attribs.href.startsWith('https://www.amazo')
+                        ) {
                             item.amazonLink = obj.attribs.href;
                         }
                     }
@@ -521,13 +524,14 @@ const extractImgAndLink = async ({ obj }, item) => {
             console.log('FOUND ERROR WITH ELEMENT');
             console.log('ERROR RETURNED: ', error);
             console.log('current block: ');
-            logCurrentBlock(currentBlock);
+            // logCurrentBlock(currentBlock);
             console.log('current name: ', currentName);
             console.log('current type: ', currentType);
             console.log('parent name: ', parentName);
             console.log('parent type: ', parentType);
             console.log('data: ', data);
             console.log('\n');
+            createHtmlFileFromSlug(slug);
         }
     };
     await findData({ obj });
@@ -644,6 +648,7 @@ const extractComponentHeaders = async ({ obj }, item) => {
             console.log('ERROR RETURNED: ', error);
             console.log('current block: ');
             logCurrentBlock(currentBlock);
+            createHtmlFileFromSlug(slug);
             console.log('current name: ', currentName);
             console.log('current type: ', currentType);
             console.log('parent name: ', parentName);
@@ -812,7 +817,7 @@ const extractRatings = async ({ obj }, item) => {
     return new Promise((resolve) => resolve(true));
 };
 
-const createDetailedReview = async ({ obj }) => {
+const createDetailedReview = async ({ obj }, slug) => {
     const item = {
         titleText: '',
         titleAnchor: '',
@@ -857,7 +862,7 @@ const createDetailedReview = async ({ obj }) => {
                 obj.attribs.class === 'wp-block-columns product-details-col'
             ) {
                 // This contains the image and amazon link
-                await extractImgAndLink({ obj }, item);
+                await extractImgAndLink({ obj }, item, slug);
                 // some also contain [amazon fields="B00EJFFDXG" value="price"]
                 // with class="product-details-price"
                 // exmaple best-warming-drawer-reviews
@@ -1180,6 +1185,7 @@ const createDetailedReview = async ({ obj }) => {
             console.log('grandparent type: ', grandParentType);
             console.log('data: ', data);
             console.log('\n');
+            cre;
             return new Promise((resolve) => resolve(true));
         }
     };

@@ -408,9 +408,9 @@ const importPosts = async (doUpdates) => {
         id: a.id,
     }));
     const publishedPosts = wpPosts.filter((a) => a.status === 'publish');
-    let count = 117;
+    let count = 401;
     const mappedPosts = await publishedPosts
-        .slice(117)
+        .slice(401)
         .reduce(async (prev, a) => {
             try {
                 const acc = await prev;
